@@ -4,7 +4,21 @@
 Created on Wed May  7 09:29:51 2025
 
 @author: vilmalehto
+
+The code for data preparation. The images and data must be in their own folders
+under the same root folder. The images must be in NIfTI format. 
+
+The file structure: 
+    root -
+         |
+         |
+         - images
+         |
+         |
+         - labels
 """
+
+
 import os
 import nibabel as nib
 import numpy as np
@@ -15,6 +29,30 @@ from torch.utils.data.dataset import Dataset
 
 class Dataset(Dataset):
     def __init__(self, root_path, images, labels, num_classes, mode="train"):
+        """
+        The code creates a list structure to acces the images slice-by-slice.
+        The list includes the name of the image file, the name of the label
+        file, and the index of the wanted slice. 
+
+        Parameters
+        ----------
+        root_path : String
+            The path to the root folder.
+        images : String
+            The name of the image folder
+        labels : String
+            The name of the image folder.
+        num_classes : int
+            The number of segmented classes. 
+        mode : string, optional
+            The default is "train". -> so far there is no changes to data
+            preparation for train and predict data. 
+
+        Returns
+        -------
+        None.
+
+        """
         
         #could check that image and label path have corresponding files,
         #but let's skip that for now
@@ -22,15 +60,17 @@ class Dataset(Dataset):
         self.num_classes = num_classes
         self.mode = mode
                 
-        #get the full data_paths
+        #get the full path to image and label folders
         self.image_path = os.path.join(root_path, images)
         self.label_path = os.path.join(root_path, labels)
         
         #create sorted list of files in the end of path 
+        #so a list of the image files and list of the label files
         self.image_files = sorted(os.listdir(self.img_path))
         self.label_files = sorted(os.listdir(self.label_path))
         
-        #createas tuple of the files
+        #createas tuple of the files 
+        #(image file name, corresponding label file name)
         pairs = zip(self.image_files, self.label_files)
                 
         #create a list of the slices and their corresponding masks
@@ -47,11 +87,35 @@ class Dataset(Dataset):
             for i in range(img_vol.shape[-1]):
                 self.slices.append((img_file, label_file, i))
                 
+                
             
     def __len__(self):
+        """
+        Returns the length of the list.
+
+        """
         return len(self.slices)
     
+    
+    
     def __getitem__(self, index):
+        """
+        Functions gets the specific image slice and the correspondig mask. 
+        The functions returns these. 
+
+        Parameters
+        ----------
+        index : int
+            The index of the wanted image.
+
+        Returns
+        -------
+        image : torch.Tensor
+            The 2D grayscale image.
+        label : torch.tensor
+            One-hot encoded segmentation mask of the corresponding image. 
+
+        """
         
         #get the infromation
         img_file, label_file, slice_idx = self.slices[index]
