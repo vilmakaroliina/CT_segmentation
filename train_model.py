@@ -5,13 +5,28 @@ Created on Tue May  6 12:59:12 2025
 
 @author: vilmalehto
 
-Model training file. The code trains the model and saves it at the end to
-the path defined by user. 
+The code for model training. The code trains the model and saves it at the end 
+of the path defined by user. This should be an empty folder.
 
-To train the model you need to know the path for training data. Currently the 
-code divides the data to 80% training and 20% validation data.
+To train the model you need to know the path for training data and validation 
+data. These have to be under the same root folder. 
 
 KEEP THE TESTING DATA IN DIFFERENT FOLDER AND DON'T GIVE THAT PATH TO MODEL HERE!
+
+The foulder stucture:
+    root-
+        |
+        |
+        - train_img
+        |
+        |
+        - train_labels
+        |
+        |
+        - val_img
+        |
+        |
+        - val_labels
 """
 
 import torch
@@ -24,30 +39,65 @@ from data_preparation import Dataset #this doesn't exist yet, but the data have 
 
 
 class ModuleTraining():
-    def __init__(self, root_path, images, labels, model_path):
+    def __init__(self, root_path, train_img, train_labels, val_img, val_labels, num_classes, model_path):
+        """
+        Functions trains and validates the model. At the end the model is saved
+        to a location specified by the user. 
+
+        Parameters
+        ----------
+        root_path : String
+            The path to the root folder.
+        train_img : String
+            The name of the file containing training images.
+        train_labels : String
+            The name of the file containing training masks. 
+        val_img : String
+            The name of the file containing validation images.
+        val_labels : String
+            The name of the file containing validation masks.
+        num_classes : int
+            The number of segmented classes, also count background.
+        model_path : String
+            The path to the file you want to save the model. 
+
+        Returns
+        -------
+        None.
+
+        """
     
-        #set the parameters
+        #set the learning parameters
         LEARNING_RATE = 0.0001 
         BATCH_SIZE = 1
         EPOCHS = 10
-        DATA_PATH = "/data" #set the correct path as I get the  data
-        MODEL_SAVE = "/models/unet.pth" #set also this once you have the data 
+        #DATA_PATH = "/data" #set the correct path as I get the  data
+        # MODEL_SAVE = "/models/unet.pth" #set also this once you have the data 
             #and you can run this, I don't know if it have to be an empty folder
+            
+        #set the parameters given by user
+        self.root_path = root_path
+        self.train_images = train_img
+        self.train_labels= train_labels
+        self.val_images = val_img
+        self.val_lables = val_labels
+        self.num_classes = num_classes
+        self.model_path = model_path
         
         #use GPU if available
         device = torch.device("mps" if torch.mps.is_available() else "cpu") #this is mac specific GPU change it to "cuda" for NVIDIA GPU:s
         
         #prepare the datasets
-        train_set = Dataset(root_path = DATA_PATH,
-                            images = "TrainImages",
-                            labels = "TrainLabels",
-                            num_classes = 5,
+        train_set = Dataset(root_path = self.root_path,
+                            images = self.train_images,
+                            labels = self.train_labels,
+                            num_classes = self.num_classes,
                             mode = "train")
       
-        val_set = Dataset(root_path = DATA_PATH,
-                          images = "ValidationImages",
-                          labels = "ValidationLabels",
-                          num_classes = 5,
+        val_set = Dataset(root_path = self.root_path,
+                          images = self.val_images,
+                          labels = self.val_labels,
+                          num_classes = self.num_classes,
                           mode = "train")
         
         #create the dataloaders
@@ -61,14 +111,15 @@ class ModuleTraining():
         
         #define the model
         #in_channels = 1 for grayscale and 3 for RGB
-        #num_classes = 4, skull, CSF, brain and haemorrhage
-        model = UNet(in_channels = 1, num_classes = 4).to(device)
+        #num_classes = 5: background, skull, CSF, brain and haemorrhage
+        model = UNet(in_channels = 1, num_classes = self.num_classes).to(device)
         
         optimizer = optim.Adam(model.parameters(), lr = LEARNING_RATE) #start with Adam optimizer as we have used that in courses
         
         criterion = nn.BCEWithLogitsLoss() #sets up the loss function, also this 
-            #is binary loss function -> have to modified based on the literature
-            
+            #is binary loss function -> have to be modified based on the literature
+        
+        #the training
         for epoch in tqdm(range(EPOCHS)):
             model.train()
             train_running_loss = 0
@@ -114,7 +165,7 @@ class ModuleTraining():
             print(f"Validation loss {val_loss:.4f}")
         
         #at the end just save the model, no need to return that
-        torch.save(model.state_dict(), MODEL_SAVE)
+        torch.save(model.state_dict(), self.model_path)
     
     
     
