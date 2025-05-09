@@ -66,8 +66,8 @@ class Dataset(Dataset):
         
         #create sorted list of files in the end of path 
         #so a list of the image files and list of the label files
-        self.image_files = sorted(os.listdir(self.img_path))
-        self.label_files = sorted(os.listdir(self.label_path))
+        self.image_files = sorted([f for f in os.listdir(self.image_path) if f.endswith('.nii') or f.endswith('.nii.gz')])
+        self.label_files = sorted([f for f in os.listdir(self.label_path) if f.endswith('.nii') or f.endswith('.nii.gz')])
         
         #createas tuple of the files 
         #(image file name, corresponding label file name)

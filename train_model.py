@@ -30,6 +30,7 @@ The foulder stucture:
 """
 
 import torch
+import os
 from torch import optim, nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -70,7 +71,7 @@ class ModuleTraining():
         #set the learning parameters
         LEARNING_RATE = 0.0001 
         BATCH_SIZE = 1
-        EPOCHS = 10
+        EPOCHS = 2
         #DATA_PATH = "/data" #set the correct path as I get the  data
         # MODEL_SAVE = "/models/unet.pth" #set also this once you have the data 
             #and you can run this, I don't know if it have to be an empty folder
@@ -80,12 +81,21 @@ class ModuleTraining():
         self.train_images = train_img
         self.train_labels= train_labels
         self.val_images = val_img
-        self.val_lables = val_labels
+        self.val_labels = val_labels
         self.num_classes = num_classes
-        self.model_path = model_path
+        #if you  want to save multiple models change the name of the file below
+        #inbetween the runs
+        self.model_path = os.path.join(model_path, "unet.pth")
+        
         
         #use GPU if available
-        device = torch.device("mps" if torch.mps.is_available() else "cpu") #this is mac specific GPU change it to "cuda" for NVIDIA GPU:s
+        #device = torch.device("mps" if torch.mps.is_available() else "cpu") #this is mac specific GPU change it to "cuda" for NVIDIA GPU:s
+        if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+            device = torch.device("mps")
+        elif torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
         
         #prepare the datasets
         train_set = Dataset(root_path = self.root_path,
