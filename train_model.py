@@ -71,7 +71,7 @@ class ModuleTraining():
         #set the learning parameters
         LEARNING_RATE = 0.0001 
         BATCH_SIZE = 1
-        EPOCHS = 2
+        EPOCHS = 1
         #DATA_PATH = "/data" #set the correct path as I get the  data
         # MODEL_SAVE = "/models/unet.pth" #set also this once you have the data 
             #and you can run this, I don't know if it have to be an empty folder

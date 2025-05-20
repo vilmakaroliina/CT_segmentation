@@ -107,11 +107,11 @@ class Dataset(Dataset):
             #loop through all of the image files
             for img_file in self.image_files:
                 #get the whole image
-                img_vol = nib.load(os.path.join(self.image_path, img_file)).getfdata()
+                img_vol = nib.load(os.path.join(self.image_path, img_file)).get_fdata()
                 
                 #save the image volume and index of the slice
-                for i in range(img_vol[-1]):
-                    self.image_slices.append(img_file, i)
+                for i in range(img_vol.shape[-1]):
+                    self.image_slices.append((img_file, i))
             
                 
             
@@ -178,7 +178,7 @@ class Dataset(Dataset):
             image_file, slice_idx = self.image_slices[index]
             
             #get the whole image
-            img_vol = nib.load(os.path.join(self.image_path, image_file))
+            img_vol = nib.load(os.path.join(self.image_path, image_file)).get_fdata()
             #get the 2D image
             image = img_vol[:, :, slice_idx].astype(np.float32)
             
@@ -188,7 +188,7 @@ class Dataset(Dataset):
             # Add channel dimension for image: (1, H, W)
             image = torch.tensor(image).unsqueeze(0)
             
-            return image, img_vol, slice_idx
+            return image, image_file, slice_idx
         
             
         

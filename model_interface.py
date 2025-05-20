@@ -68,7 +68,7 @@ def predicting(model, device, root_path, image_folder, num_classes, prediction_f
         
         #loop through the slices
         #the image slice, the name of the image file, and the index of the image slice
-        for image, img_file, slice_idx in tqdm(data_loader, desc="predict"):
+        for image, img_file, slice_idx in tqdm.tqdm(data_loader, desc="predict"):
             #get the 2D image to gpu if available
             image = image.to(device)
             #pass the image through the model
@@ -127,8 +127,8 @@ def module_training(root_path, num_classes, device):
     #change these to match your folder structure
     train_img = "train_images"
     train_labels = "train_labels"
-    val_img = "val_images"
-    val_labels = "val_labels"
+    val_img = "validation_images"
+    val_labels = "validation_labels"
 
     #set the model path
     model_path = os.path.join(root_path, "model")
@@ -142,19 +142,25 @@ if __name__ == "__main__":
     
     #lets just expect that there is a correct folder structure and 
     #ask only the name of the root folder
-    root_path = input("To run the model give the path to a root folder including the folders for images and model: ")
+    #root_path = input("To run the model give the path to a root folder including the folders for images and model: ")
+    root_path = "/Users/vilmalehto/Documents/Koulu/Dippa/Old_Image_Data"
     
     #ask the number of segments
-    num_classes = input("Give the number of segments (including background): ")
+    #num_classes = input("Give the number of segments (including background): ")
+    num_classes = 18
     #change these commentation if you want to
     #num_classes = 5
     
+    acceptable_modes = ["T", "P", "C"]
     #does the user want to predict or tain the model
-    mode = input("Do you want to train(T) or predict(P): ")
+    mode = input("Do you want to train(T), predict(P) or close the program (C): ")
+    print(mode)
     
-    if mode != "T" or "P":
-        mode = input("The mode have to be T for train or P for predcit: ")
+    while mode not in acceptable_modes:
+        mode = input("The mode have to be T for train, P for predcit or C for closing: ")
+        print(mode)
 
+    
     #find the gpu if available
     #define the device, gpu/cpu
     if torch.backends.mps.is_available() and torch.backends.mps.is_built():
@@ -163,28 +169,34 @@ if __name__ == "__main__":
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-        
+     
+    while mode == "T" or mode == "P":
     
-    if mode ==  "T":
-        module_training(root_path, num_classes, device)
+        if mode ==  "T":
+            module_training(root_path, num_classes, device)
+            
+        else:
+            #if predicting we need information about the model and place for predictions
+            
+            #I will set these myself, don't want to be constantly giving these as input
+            #weights_path = input("Give the name of the folder where model weights are saved: ")
+            weights_path = "/Users/vilmalehto/Documents/Koulu/Dippa/Old_Image_Data/model/unet.pth"
+            
+            #prediction_folder = input("Give the name of the folder where predictions will be saved: ")
+            prediction_folder = "predictions"
+            
+            #image_folder = input("Give the name of the folder where the images are: ")
+            image_folder = "test_images"
+            
+            #load the model
+            model = UNet(1, num_classes)
+            model.load_state_dict(torch.load(weights_path, map_location = device))
+            
+            predicting(model, device, root_path, image_folder, num_classes, prediction_folder)
+            
+        mode = input("Do you want to train(T), predict(P) or close the program (C): ")
+        print(mode)
+            
         
-    else:
-        #if predicting we need information about the model and place for predictions
-        
-        #I will set these myself, don't want to be constantly giving these as input
-        #weights_path = input("Give the name of the folder where model weights are saved: ")
-        weights_path = "path"
-        
-        #prediction_folder = input("Give the name of the folder where predictions will be saved: ")
-        prediction_folder = "predictions"
-        
-        #image_folder = input("Give the name of the folder where the images are: ")
-        image_folder = "test_images"
-        
-        #load the model
-        model = UNet()
-        model.load_state_dict(torch.load(weights_path, map_location = device))
-        
-        predicting(model, device, root_path, image_folder, num_classes, prediction_folder)
         
 
