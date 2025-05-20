@@ -40,7 +40,7 @@ from data_preparation import Dataset #this doesn't exist yet, but the data have 
 
 
 class ModuleTraining():
-    def __init__(self, root_path, train_img, train_labels, val_img, val_labels, num_classes, model_path):
+    def __init__(self, root_path, train_img, train_labels, val_img, val_labels, num_classes, model_path, device):
         """
         Functions trains and validates the model. At the end the model is saved
         to a location specified by the user. 
@@ -86,16 +86,6 @@ class ModuleTraining():
         #if you  want to save multiple models change the name of the file below
         #inbetween the runs
         self.model_path = os.path.join(model_path, "unet.pth")
-        
-        
-        #use GPU if available
-        #device = torch.device("mps" if torch.mps.is_available() else "cpu") #this is mac specific GPU change it to "cuda" for NVIDIA GPU:s
-        if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-            device = torch.device("mps")
-        elif torch.cuda.is_available():
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
         
         #prepare the datasets
         train_set = Dataset(root_path = self.root_path,
@@ -176,6 +166,7 @@ class ModuleTraining():
         
         #at the end just save the model, no need to return that
         torch.save(model.state_dict(), self.model_path)
+        
     
     
     
