@@ -8,14 +8,6 @@ Created on Wed May  7 09:29:51 2025
 The code for data preparation. The images and data must be in their own folders
 under the same root folder. The images must be in NIfTI format. 
 
-The file structure: 
-    root -
-         |
-         |
-         - images
-         |
-         |
-         - labels
 """
 
 

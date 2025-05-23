@@ -13,20 +13,6 @@ data. These have to be under the same root folder.
 
 KEEP THE TESTING DATA IN DIFFERENT FOLDER AND DON'T GIVE THAT PATH TO MODEL HERE!
 
-The foulder stucture:
-    root-
-        |
-        |
-        - train_img
-        |
-        |
-        - train_labels
-        |
-        |
-        - val_img
-        |
-        |
-        - val_labels
 """
 
 import torch

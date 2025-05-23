@@ -4,6 +4,9 @@
 Created on Tue May  6 08:59:13 2025
 
 @author: vilmalehto
+
+The UNet model. The code is done based on the original UNet architecture 
+(Ronneberger et al. 2015). 
 """
 
 import torch
@@ -11,6 +14,20 @@ import torch.nn as nn
 
 #tupla konvoluutio, eli ne kaksi vaakatason nuolta mallin kuvassa
 class ConvolutionBlock(nn.Module):
+    """
+    A double convolution block. Each convolution consists of:
+    Conv2D -> BatchNorm -> ReLU
+        
+    Used in both encode and decoder parts of the Unet and on its own 
+    in the bottle neck.
+        
+    Parameters
+    ----------
+    in_channels: int
+        Number of input channels
+    out_channels: int
+        Number of output channels
+    """
     def __init__(self, in_channels, out_channels):
         super().__init__() #super init to construct the parent class
         
@@ -23,10 +40,36 @@ class ConvolutionBlock(nn.Module):
             nn.ReLU(inplace =  True))
         
     def forward(self, x):
+        """
+        Forward pass for the double convolution block.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (B, C_in, H, W)
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (B, C_out, H, W)
+
+        """
         return self.conv_output(x)
         
     
 class EncoderBlock(nn.Module):
+    """
+    Encoder block for downsampling the input.
+    Applies a ConvolutionBlock followed by MaxPooling.
+    Prepares the output for next encoder block and skipped connection. 
+    
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels. 
+    """
     def __init__(self, in_channels, out_channels):
         super().__init__()
         
@@ -37,12 +80,38 @@ class EncoderBlock(nn.Module):
         #The skip connection output is the convolution output
         #and the U-path output goes through the MaxPooling
     def forward(self, x):
+        """
+        Forward pass through the encoder block.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor.
+        
+        Returns
+        -------
+        conv_output : torch.Tensor
+            Output from convolution block (used for skip connection).
+        pooling : torch.Tensor
+            Downsampled output (used for next encoder block).
+        """
         conv_output = self.convolution(x)
         pooling = self.downsample(conv_output)
         
         return conv_output, pooling
         
 class DecoderBlock(nn.Module):
+    """
+    Decoder block for upsampling the feature maps.
+    Upsamples the input, concatenates with skip connection, and applies ConvolutionBlock.
+    
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels.
+    """
     def __init__(self, in_channels, out_channels):
         super().__init__()
         
@@ -52,6 +121,21 @@ class DecoderBlock(nn.Module):
     #the inputs for decoder block are the output from previous 
     #encoder/decoder block and the input from skipconnection
     def forward(self, x1, x2): 
+        """
+        Forward pass through the decoder block.
+        
+        Parameters
+        ----------
+        x1 : torch.Tensor
+            Input from the previous decoder or bottleneck (U-path).
+        x2 : torch.Tensor
+            Skip connection input from encoder block.
+        
+        Returns
+        -------
+        torch.Tensor
+            Output feature map after upsampling and convolution.
+        """
         up = self.up(x1) #upsample the input form u-path
         comb = torch.cat([up, x2], 1) #concatenate the inputs
         op = self.conv(comb) #do a convolution for the concatenated part
@@ -59,6 +143,17 @@ class DecoderBlock(nn.Module):
             
 
 class UNet(nn.Module):
+    """
+    UNet architecture for segmentation. Calls the block in right order, to 
+    create the architecture.
+    
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels (e.g., 3 for RGB images).
+    num_classes : int
+        Number of output classes for segmentation.
+    """
     def __init__(self, in_channels, num_classes):
         super().__init__()
         
@@ -81,6 +176,19 @@ class UNet(nn.Module):
         self.output = nn.Conv2d(in_channels = 64, out_channels = num_classes, kernel_size = 1)
         
     def forward(self, x):
+        """
+        Forward pass through the full UNet architecture.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (B, C, H, W).
+        
+        Returns
+        -------
+        torch.Tensor
+            Output segmentation map of shape (B, num_classes, H, W).
+        """
         
         skip1, p1 = self.down_conv1(x)
         skip2, p2 = self.down_conv2(p1)

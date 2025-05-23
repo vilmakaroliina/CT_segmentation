@@ -6,6 +6,52 @@ Created on Tue May 13 12:59:33 2025
 @author: vilmalehto
 
 A code for actually running the model.
+
+First the root folder and number of segmentation classes is set. If needed the 
+model file and files for saving the model and results are determined. This can 
+be done by asking these as a input from user or just setting them in the main 
+function. The decision for used method is done by changing the commenting in 
+the main function.
+
+The program asks the user if they want to train the model, predict with existing
+model or close the program. 
+
+For training the program calls modul_training function which sets the names
+of the image and label files and then calls the ModuleTraining class. The class
+does the training and saves the weights of the model for use. 
+
+For predicting the program loads the model and weights and calls the predicting
+function. The functions does the prediction and saves the results. 
+
+If the user wants to close the program the input loop is ecxisted and the 
+program stops running.
+
+For the whole program to work you have to have a root folder including a 
+file for all the images. The model and pre-existing weights can be in or out
+the root folder. 
+
+The file structure:
+    root -
+         /
+          - train_images
+         /
+         /
+          - train_labels
+         /
+         /
+          - validation_images
+         /
+         /
+          - validation_labels
+         /
+         /
+          - test_images (images for prediction)
+         /
+         /
+          - predictions
+        
+          
+      model/weights
 """
 import os
 import torch
@@ -24,18 +70,29 @@ from unet import UNet
 def predicting(model, device, root_path, image_folder, num_classes, prediction_folder):
     """
     A function for predicting with the model. 
+    
+    The images are prepared with custom datset class and wraped into DataLoader.
+    The model is set to eval state and the gradient compunation is turned off.
+    The program loops through the slices and uses the argmax() to get the class
+    with highest likelihood. The prediction and the metadata form the original
+    image are saved to corresponding dictionaries. 
+    
+    After this the program loops through the predictions and saves them in 
+    .nii format to file named based on the original image file. 
 
     Parameters
     ----------
-    model : TYPE
-        DESCRIPTION.
+    model : PyTorch - CNN network
+        The custom UNet model done based on the original UNet archicture 
+        (Ronneberger et al., 2015). In this code it is set to handle grayscale 
+        images. 
     root_path : String
         The path to the root folder.
     image_folder : String
         The name of the image folder.
     num_classes : int
         The number of the segmentation classes. 
-    prediction_folder : TString
+    prediction_folder : String
         The name of the folder where the predictions will be saved. 
 
     Returns
@@ -116,21 +173,47 @@ def predicting(model, device, root_path, image_folder, num_classes, prediction_f
         pred_nii = nib.Nifti1Image(volume, affine, header)
         
         #save the prediction to file corresponding to image file
-        prediction_file = "Pred"+img_file
+        prediction_file = "Prediction_"+img_file
         save_path = os.path.join(root_path, prediction_folder, prediction_file)
         nib.save(pred_nii, save_path)      
     
     
     
 def module_training(root_path, num_classes, device):
+    """
+    The function for training the model. Sets the names of the image and label
+    files and calls the ModuleTraining class to do the training and save 
+    the weights. 
+
+    Parameters
+    ----------
+    root_path : String
+        The path to the root folder.
+    num_classes : int
+        The number of segmentation classes. Note this has to be atleast as high
+        as in the training labels. 
+    device : torch.device
+        The hardware for running the model on, CPU or GPU.
+
+    Returns
+    -------
+    None.
+
+    """
     #set the file names
     #change these to match your folder structure
+    
+    #train_img = input("What is the name of the folder for training images: ")
     train_img = "train_images"
+    #train_labels = input("What is the name of the folder for training labels: ")
     train_labels = "train_labels"
+    #val_img = input("What is the name of the file for validation images: ")
     val_img = "validation_images"
+    #val_labels = input("What is the name of the folder for validation labels: ")
     val_labels = "validation_labels"
 
     #set the model path
+    #model_path = input("Give the path to the folder where model will be saved: ")
     model_path = os.path.join(root_path, "model")
     
     #train and save model to unet.pth file
@@ -141,15 +224,15 @@ def module_training(root_path, num_classes, device):
 if __name__ == "__main__":
     
     #lets just expect that there is a correct folder structure and 
+    #change these commentation if you want to
+    
     #ask only the name of the root folder
     #root_path = input("To run the model give the path to a root folder including the folders for images and model: ")
     root_path = "/Users/vilmalehto/Documents/Koulu/Dippa/Old_Image_Data"
     
     #ask the number of segments
-    #num_classes = input("Give the number of segments (including background): ")
+    #num_classes = int(input("Give the number of segments (including background): "))
     num_classes = 18
-    #change these commentation if you want to
-    #num_classes = 5
     
     acceptable_modes = ["T", "P", "C"]
     #does the user want to predict or tain the model
