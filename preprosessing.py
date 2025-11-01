@@ -26,6 +26,41 @@ def contrastAdjustment(image, output_path):
     
     return
 
+def volumeAugmentation(image):
+    #set the limits for augmentations
+    flip_probability = 0.5
+    zoom_range = 0.05
+    rotation_range=5
+    
+    #getthedimensions of image volume
+    h, w, d = image.shape
+    
+    #set the augmentation parameters
+    do_flip = np.random.rand() < flip_probability
+    zoom_factor = 1 + np.random.uniform(-zoom_range, zoom_range)
+    angle = np.random.uniform(-rotation_range, rotation_range)
+    
+    zoom = cv2.getRotationMatrix2D((w/2, h/2), 0, zoom_factor)
+    rotation = cv2.getRotationMatrix2D((w/2, h/2), angle, 1)
+    
+    #init the augmented volume
+    augmented = np.zeros_like(image)
+    
+    #apply augmentation for all slices in the image volume
+    #all will be zoomed and rotated, but the flipping will happen only in random cases
+    for i in range(d):
+        current_slice = image[:, :, i]
+        
+        if do_flip:
+            current_slice = cv2.flip(current_slice, 1)
+        current_slice = cv2.warpAffine(current_slice, zoom, (w, h), flags=cv2.INTER_LINEAR)
+        current_slice = cv2.warpAffine(current_slice, rotation, (w, h), flags = cv2.INTER_NEAREST)
+        
+        augmented[:, :, i] = current_slice
+        
+    return augmented
+    
+
 if __name__ == "__main__":
     
     image_path = "/Users/vilmalehto/Documents/Koulu/Dippa/To_be_segmented/Images"
@@ -37,3 +72,20 @@ if __name__ == "__main__":
     output_path = "/Users/vilmalehto/Documents/Koulu/Dippa/To_be_segmented"
     
     contrast_mod = contrastAdjustment(ct_data, output_path)
+    
+    
+    #call for data augmentation
+    for fname in os.listdir(image_path):
+        fpath=os.path.join(image_path, fname)
+        
+        nii =nib.load(fpath)
+        volume = nii.get_fdata()
+        
+        augmented = volumeAugmentation(volume)
+        
+        output_file = os.path.join(output_path, f"aug_{fname}")
+        nib.save(nib.Nifti1Image(augmented, affine=nii.affine, header = nii.header), output_file)
+        
+        
+    
+    
