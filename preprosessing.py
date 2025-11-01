@@ -11,8 +11,6 @@ import os
 import nibabel as nib
 
 def contrastAdjustment(image, output_path):
-    gamma = 1.2
-    
     clahe = cv2.createCLAHE(clipLimit = 3.5)
     
     enhanced_volume = np.zeros_like(image)
@@ -21,13 +19,9 @@ def contrastAdjustment(image, output_path):
         current_slice = image[:, :, i]
         slice_norm = cv2.normalize(current_slice, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
         enhanced_volume[:, :, i] = clahe.apply(slice_norm)
-        
-    #gamma correction, to incrrease contrast
-    gamma_corrected = np.power(enhanced_volume/255.0, 1/gamma) * 255
-    gamma_corrected = gamma_corrected.astype(np.uint8)
     
-    output_file = os.path.join(output_path, "Enhanced_EIT-013.V2.nii.gz")
-    enhanced_nii = nib.Nifti1Image(gamma_corrected, affine=np.eye(4))
+    output_file = os.path.join(output_path, "Enhanced_EIT-013.V1.1.nii.gz")
+    enhanced_nii = nib.Nifti1Image(enhanced_volume, affine=np.eye(4))
     nib.save(enhanced_nii, output_file)
     
     return
