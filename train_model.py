@@ -20,13 +20,39 @@ import os
 import nibabel as nib
 import numpy as np
 from torch import optim, nn
-from torch.utils.data import DataLoader
 from tqdm import tqdm
+import torch.nn.functional as F
+
 
 from unet import UNet #our unet class
-from data_preparation import Dataset #this doesn't exist yet, but the data have to be prepared
 
-
+class HybridLoss(nn.Module):
+    def __init__(self, weight_ce=0.5, weight_dice=0.5, eps=1e-6):
+        super(HybridLoss, self).__init__()
+        self.weight_ce = weight_ce
+        self.weight_dice = weight_dice
+        self.eps = eps
+        self.ce_loss_fn = nn.CrossEntropyLoss()
+        
+    def forward(self, result, target):
+        
+        # Dice loss
+        probs = F.softmax(result, dim=1)
+        intersection = (probs * target).sum(dim=(0, 2, 3))
+        union = probs.sum(dim=(0, 2, 3)) + target.sum(dim=(0, 2, 3))
+        dice_per_class = (2 * intersection + self.eps) / (union + self.eps)
+        dice_loss = 1 - dice_per_class.mean()
+        
+        # Cross-entropy loss
+        ce_target = target.argmax(dim=1).long()
+        ce_loss = self.ce_loss_fn(result, ce_target)
+        
+        # Combine
+        hybrid_loss = self.weight_dice * dice_loss + self.weight_ce * ce_loss
+        return hybrid_loss
+    
+    
+    
 class ModuleTraining():
     def __init__(self, train_dataloader, val_dataloader, num_classes, batch_size, model_path, device):
         """
@@ -59,7 +85,6 @@ class ModuleTraining():
         #set the learning parameters
         LEARNING_RATE = 0.0001
         EPOCHS = 1
-        BATCH_SIZE = batch_size
         #DATA_PATH = "/data" #set the correct path as I get the  data
         # MODEL_SAVE = "/models/unet.pth" #set also this once you have the data 
             #and you can run this, I don't know if it have to be an empty folder
@@ -80,7 +105,7 @@ class ModuleTraining():
         
         optimizer = optim.Adam(model.parameters(), lr = LEARNING_RATE) #start with Adam optimizer as we have used that in courses
         
-        criterion = nn.BCEWithLogitsLoss() #sets up the loss function, also this 
+        criterion = HybridLoss() #sets up the loss function, also this 
             #is binary loss function -> have to be modified based on the literature
         
         #the training
@@ -97,7 +122,7 @@ class ModuleTraining():
                 optimizer.zero_grad() #no idea what this does
                 
                 #count the loss
-                loss = criterion(y_pred, mask) #comapre the manual segmentation and prediction
+                loss = criterion(y_pred, mask) #compare the manual segmentation and prediction
                 train_running_loss += loss.item()
                 
                 #these are also mystery
@@ -123,6 +148,7 @@ class ModuleTraining():
                 val_loss = val_runnin_loss / idx+1
                 
             #print for every epoch
+            print()
             print("-"*30) #kuha näitä on enemmmä ku merkkejä tekstissä
             print(f"EPOCH {epoch +1 }")
             print(f"Train loss {train_loss:.4f}")
