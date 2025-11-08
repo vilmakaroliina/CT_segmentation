@@ -17,6 +17,8 @@ KEEP THE TESTING DATA IN DIFFERENT FOLDER AND DON'T GIVE THAT PATH TO MODEL HERE
 
 import torch
 import os
+import nibabel as nib
+import numpy as np
 from torch import optim, nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -55,8 +57,7 @@ class ModuleTraining():
         """
     
         #set the learning parameters
-        LEARNING_RATE = 0.0001 
-        BATCH_SIZE = 1
+        LEARNING_RATE = 0.0001
         EPOCHS = 1
         #DATA_PATH = "/data" #set the correct path as I get the  data
         # MODEL_SAVE = "/models/unet.pth" #set also this once you have the data 
@@ -73,27 +74,6 @@ class ModuleTraining():
         #inbetween the runs
         self.model_path = os.path.join(model_path, "unet.pth")
         
-        #prepare the datasets
-        train_set = Dataset(root_path = self.root_path,
-                            images = self.train_images,
-                            labels = self.train_labels,
-                            num_classes = self.num_classes,
-                            mode = "train")
-      
-        val_set = Dataset(root_path = self.root_path,
-                          images = self.val_images,
-                          labels = self.val_labels,
-                          num_classes = self.num_classes,
-                          mode = "train")
-        
-        #create the dataloaders
-        train_dataloader = DataLoader(dataset = train_set,
-                                      batch_size = BATCH_SIZE,
-                                      shuffle = True)
-        
-        val_dataloader = DataLoader(dataset = val_set,
-                                    batch_size  = BATCH_SIZE,
-                                    shuffle = True)
         
         #define the model
         #in_channels = 1 for grayscale and 3 for RGB
@@ -156,7 +136,104 @@ class ModuleTraining():
     
     
     
+      
+class Predicting():
+    def __init__(self, images, prediction_path, model, device):
+        """
+        A class for predicting with the model. 
+        
+        The images are prepared with custom datset class and wraped into DataLoader.
+        The model is set to eval state and the gradient compunation is turned off.
+        The program loops through the slices and uses the argmax() to get the class
+        with highest likelihood. The prediction and the metadata form the original
+        image are saved to corresponding dictionaries. 
+        
+        After this the program loops through the predictions and saves them in 
+        .nii format to file named based on the original image file. 
     
+        Parameters
+        ----------
+        model : PyTorch - CNN network
+            The custom UNet model done based on the original UNet archicture 
+            (Ronneberger et al., 2015). In this code it is set to handle grayscale 
+            images. 
+        images:
+    
+        num_classes : int
+            The number of the segmentation classes. 
+        prediction_folder : String
+            The name of the folder where the predictions will be saved. 
+    
+        Returns
+        -------
+        None.
+    
+        """
+        
+        #set the model to evaluation state
+        model.eval()
+        model.to(device)
+        
+        #createa dictionary for predictions
+        volumes = {}
+        metadata = {}
+        
+        #predicting
+        with torch.no_grad():
+            
+            #loop through the slices
+            #the image slice, the name of the image file, and the index of the image slice
+            for image, img_file, slice_idx in tqdm(images, desc="predict"):
+                #get the 2D image to gpu if available
+                image = image.to(device)
+                #pass the image through the model
+                output = model(image)
+                #get the prediction
+                #argmax() gets the most likely class per pixel/voxel
+                pred = torch.argmax(output, dim=1).numpy().squeeze(0) #2D numpy array
+                
+                #extract the filename and slice index
+                img_file = img_file[0]
+                slice_idx = slice_idx.item()
+                
+                #check if the file already exist in volumes dict
+                if img_file not in volumes:
+                    #if not create it
+                    volumes[img_file] = {}
+                    
+                    #get the metadata from original file
+                    path = os.path.join(images.dataset.image_path, img_file)
+                    nii = nib.load(path)
+                    metadata[img_file] = (nii.affine, nii.header)
+                    
+                #save the prediction to correct spot
+                volumes[img_file][slice_idx] = pred
+                    #volumes = { "img_file_1.nii": {0: pred, 1: pred}, 
+                    #           "img_file_2.nii" = {0: pred, 1: pred}}
+                
+        #loop through the predictions
+        for img_file, slice_preds in volumes.items():
+            #Find the highest slice number for the specific image file
+            max_idx = max(slice_preds.keys()) + 1
+            #initialize the array for 3D label
+            volume = np.zeros((list(slice_preds.values())[0].shape[0],
+                               list(slice_preds.values())[0].shape[1],
+                               max_idx), dtype=np.uint8)
+            
+            #get each prediction slice
+            for idx, prediction in slice_preds.items():
+                #save the slice to its correct spot in the 3D array
+                volume[:, :, idx] = prediction
+            
+            #get the corresponding metadata
+            affine, header = metadata[img_file]
+            #create the .nii format with prediction volume and metadata
+            pred_nii = nib.Nifti1Image(volume, affine, header)
+            
+            #save the prediction to file corresponding to image file
+            prediction_file = "Prediction_"+img_file
+            save_path = os.path.join(prediction_path, prediction_file)
+            nib.save(pred_nii, save_path)    
         
             
     

@@ -53,6 +53,7 @@ The file structure:
           
       model/weights
 """
+import cv2
 import os
 import torch
 import tqdm
@@ -64,175 +65,174 @@ from torch.utils.data import DataLoader
 #my classes
 from data_preparation import Dataset
 from train_model import ModuleTraining
+from train_model import Predicting
 from unet import UNet
 
     
-def predicting(model, device, root_path, image_folder, num_classes, prediction_folder):
-    """
-    A function for predicting with the model. 
     
-    The images are prepared with custom datset class and wraped into DataLoader.
-    The model is set to eval state and the gradient compunation is turned off.
-    The program loops through the slices and uses the argmax() to get the class
-    with highest likelihood. The prediction and the metadata form the original
-    image are saved to corresponding dictionaries. 
+def set_parameters(mode):
     
-    After this the program loops through the predictions and saves them in 
-    .nii format to file named based on the original image file. 
-
-    Parameters
-    ----------
-    model : PyTorch - CNN network
-        The custom UNet model done based on the original UNet archicture 
-        (Ronneberger et al., 2015). In this code it is set to handle grayscale 
-        images. 
-    root_path : String
-        The path to the root folder.
-    image_folder : String
-        The name of the image folder.
-    num_classes : int
-        The number of the segmentation classes. 
-    prediction_folder : String
-        The name of the folder where the predictions will be saved. 
-
-    Returns
-    -------
-    None.
-
-    """
+    #ask the number of segments
+    #num_classes = int(input("Give the number of segments (including background): "))
+    num_classes = 7
     
-    #set the model to evaluation state
-    model.eval()
-    model.to(device)
+    #root_path = input("To run the model give the path to a root folder including the folders for images and model: ")
+    root_path = "/Users/vilmalehto/Documents/Koulu/Dippa/Test_arc"
     
-    #Create the dataset of the images
-    my_data = Dataset(root_path, image_folder, "None", num_classes, mode = "predict")
-    
-    #Wrap data in DataLoader
-    data_loader = DataLoader(dataset = my_data, 
-                             batch_size = 1, 
-                             shuffle= True)
-    #create folder for results (the segment masks)
-    #the folder have to be empty and same name folder cannot exist before hand
-    
-    #createa dictionary for predictions
-    volumes = {}
-    metadata = {}
-    
-    #Predicting
-    #turn off gradient computantion, to save memory 
-    with torch.no_grad():
+    if mode == "T":
+        #train_img = input("What is the name of the folder for training images: ")
+        train_img = "Training_images"
+        #train_labels = input("What is the name of the folder for training labels: ")
+        train_labels = "Training_labels"
+        #val_img = input("What is the name of the file for validation images: ")
+        val_img = "Validation_images"
+        #val_labels = input("What is the name of the folder for validation labels: ")
+        val_labels = "Validation_labels"
         
-        #loop through the slices
-        #the image slice, the name of the image file, and the index of the image slice
-        for image, img_file, slice_idx in tqdm.tqdm(data_loader, desc="predict"):
-            #get the 2D image to gpu if available
-            image = image.to(device)
-            #pass the image through the model
-            output = model(image)
-            #get the prediction
-            #argmax() gets the most likely class per pixel/voxel
-            pred = torch.argmax(output, dim=1).numpy().squeeze(0) #2D numpy array
+        images = [train_img, val_img]
+        labels = [train_labels, val_labels]
+        
+        #model_path = input("Give the path to the folder where model will be saved: ")
+        model_path = os.path.join(root_path, "model")
+        
+    if mode == "P":
+        #weights_path = input("Give the name of the folder where model weights are saved: ")
+        model_path = os.path.join(root_path, "Model/unet.pth")
+        
+        #prediction_folder = input("Give the name of the folder where predictions will be saved: ")
+        labels = "Predictions"
+        
+        #image_folder = input("Give the name of the folder where the images are: ")
+        images = "Test_images"
+        
+    return root_path, num_classes, images, labels, model_path
+
+def contrastAdjustment(image):
+    clahe = cv2.createCLAHE(clipLimit = 3.5)
+    
+    enhanced_volume = np.zeros_like(image)
+    #apply clahe slice by slice
+    for i in range(image.shape[2]):
+        current_slice = image[:, :, i]
+        slice_norm = cv2.normalize(current_slice, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+        enhanced_volume[:, :, i] = clahe.apply(slice_norm)
+    
+    return enhanced_volume
+
+
+
+def volumeAugmentation(image, label):
+    #set the limits for augmentations
+    flip_probability = 0.5
+    zoom_range = 0.05
+    rotation_range = 5
+    
+    #get the dimensions of image volume
+    h, w, d = image.shape
+    
+    #set the augmentation parameters
+    do_flip = np.random.rand() < flip_probability
+    zoom_factor = 1 + np.random.uniform(-zoom_range, zoom_range)
+    angle = np.random.uniform(-rotation_range, rotation_range)
+    
+    zoom = cv2.getRotationMatrix2D((w/2, h/2), 0, zoom_factor)
+    rotation = cv2.getRotationMatrix2D((w/2, h/2), angle, 1)
+    
+    #init the augmented volume
+    augmented_image = np.zeros_like(image)
+    augmented_label = np.zeros_like(label)
+    
+    #apply augmentation for all slices in the image volume
+    #all will be zoomed and rotated, but the flipping will happen only in random cases
+    for i in range(d):
+        current_image_slice = image[:, :, i]
+        current_label_slice = label[:, :, i]
+        
+        if do_flip:
+            current_image_slice = cv2.flip(current_image_slice, 1)
+            current_label_slice = cv2.flip(current_label_slice, 1)
             
-            #extract the filename and slice index
-            img_file = img_file[0]
-            slice_idx = slice_idx.item()
+        #zooming   
+        current_image_slice = cv2.warpAffine(current_image_slice, zoom, (w, h), flags=cv2.INTER_LINEAR)
+        current_label_slice = cv2.warpAffine(current_label_slice, zoom, (w, h), flags=cv2.INTER_LINEAR)
+        
+        #rotation
+        current_image_slice = cv2.warpAffine(current_image_slice, rotation, (w, h), flags = cv2.INTER_NEAREST)
+        current_label_slice = cv2.warpAffine(current_label_slice, rotation, (w, h), flags = cv2.INTER_NEAREST)
+        
+        augmented_image[:, :, i] = current_image_slice
+        augmented_label[:, :, i] = current_label_slice
+
+        
+    return augmented_image, augmented_label
+
+
+
+def pre_process(images, labels, mode):
+    
+    #loop through the images in the folder
+    sorted_images = sorted([f for f in os.listdir(images) if f.endswith('.nii') or f.endswith('.nii.gz')])
+    
+    #set the save folders
+    if mode == "P":
+        output_path = os.path.join(images, "Contrast_modified")
+        
+    elif mode == "T":
+        image_output_path = os.path.join(images, "Augmented_images")
+        label_output_path = os.path.join(labels, "Augmented_labels")
+        
+    for i in range(len(sorted_images)):
+        image_name = sorted_images[i]
+        image_path = os.path.join(images, image_name)
+        
+        #load the image data
+        image = nib.load(image_path)
+        ct_data = image.get_fdata()
+        
+        #call for contrast adjustment
+        contrast_mod = contrastAdjustment(ct_data) #return the modified volume
+        
+        if mode == "P": 
+            #save the contrast modified image
+            output_file = os.path.join(output_path, f"mod_{image_name}")
+            enhanced_nii = nib.Nifti1Image(contrast_mod, affine=np.eye(4))
+            nib.save(enhanced_nii, output_file) 
             
-            #check if the file already exist in volumes dict
-            if img_file not in volumes:
-                #if not create it
-                volumes[img_file] = {}
-                
-                #get the metadata from original file
-                path = os.path.join(my_data.image_path, img_file)
-                nii = nib.load(path)
-                metadata[img_file] = (nii.affine, nii.header)
-                
-            #save the prediction to correct spot
-            volumes[img_file][slice_idx] = pred
-                #volumes = { "img_file_1.nii": {0: pred, 1: pred}, 
-                #           "img_file_2.nii" = {0: pred, 1: pred}}
+        elif mode == "T":
+            #get the labels
+            sorted_labels = sorted([f for f in os.listdir(labels) if f.endswith('.nii') or f.endswith('.nii.gz')])
+            label_name = sorted_labels[i]
+            label_path = os.path.join(labels, label_name)
             
-    #loop through the predictions
-    for img_file, slice_preds in volumes.items():
-        #Find the highest slice number for the specific image file
-        max_idx = max(slice_preds.keys()) + 1
-        #initialize the array for 3D label
-        volume = np.zeros((list(slice_preds.values())[0].shape[0],
-                           list(slice_preds.values())[0].shape[1],
-                           max_idx), dtype=np.uint8)
-        
-        #get each prediction slice
-        for idx, prediction in slice_preds.items():
-            #save the slice to its correct spot in the 3D array
-            volume[:, :, idx] = prediction
-        
-        #get the corresponding metadata
-        affine, header = metadata[img_file]
-        #create the .nii format with prediction volume and metadata
-        pred_nii = nib.Nifti1Image(volume, affine, header)
-        
-        #save the prediction to file corresponding to image file
-        prediction_file = "Prediction_"+img_file
-        save_path = os.path.join(root_path, prediction_folder, prediction_file)
-        nib.save(pred_nii, save_path)      
+            label=nib.load(label_path)
+            label_data = label.get_fdata()
+            
+            #call for augmentation
+            aug_image, aug_label = volumeAugmentation(contrast_mod, label_data)  #return the volumes
+            
+            #save the augmented volumes
+            image_output_file = os.path.join(image_output_path, f"aug_{image_name}")
+            label_output_file = os.path.join(label_output_path, f"aug_{label_name}")
+            
+            image_nii = nib.Nifti1Image(aug_image, affine=np.eye(4))
+            label_nii = nib.Nifti1Image(aug_label, affine=np.eye(4))
+            
+            nib.save(image_nii, image_output_file) 
+            nib.save(label_nii, label_output_file) 
+            
+            output_path = [image_output_path, label_output_path]
+            
+    #return the path to processed data  
+    return output_path
     
     
     
-def module_training(root_path, num_classes, device):
-    """
-    The function for training the model. Sets the names of the image and label
-    files and calls the ModuleTraining class to do the training and save 
-    the weights. 
 
-    Parameters
-    ----------
-    root_path : String
-        The path to the root folder.
-    num_classes : int
-        The number of segmentation classes. Note this has to be atleast as high
-        as in the training labels. 
-    device : torch.device
-        The hardware for running the model on, CPU or GPU.
-
-    Returns
-    -------
-    None.
-
-    """
-    #set the file names
-    #change these to match your folder structure
-    
-    #train_img = input("What is the name of the folder for training images: ")
-    train_img = "train_images"
-    #train_labels = input("What is the name of the folder for training labels: ")
-    train_labels = "train_labels"
-    #val_img = input("What is the name of the file for validation images: ")
-    val_img = "validation_images"
-    #val_labels = input("What is the name of the folder for validation labels: ")
-    val_labels = "validation_labels"
-
-    #set the model path
-    #model_path = input("Give the path to the folder where model will be saved: ")
-    model_path = os.path.join(root_path, "model")
-    
-    #train and save model to unet.pth file
-    ModuleTraining(root_path, train_img, train_labels, val_img, val_labels, num_classes, model_path, device)
-    
     
 
 if __name__ == "__main__":
     
-    #lets just expect that there is a correct folder structure and 
-    #change these commentation if you want to
-    
-    #ask only the name of the root folder
-    #root_path = input("To run the model give the path to a root folder including the folders for images and model: ")
-    root_path = "/Users/vilmalehto/Documents/Koulu/Dippa/Old_Image_Data"
-    
-    #ask the number of segments
-    #num_classes = int(input("Give the number of segments (including background): "))
-    num_classes = 18
+    BATCH_SIZE = 1
     
     acceptable_modes = ["T", "P", "C"]
     #does the user want to predict or tain the model
@@ -253,29 +253,70 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
      
+        
     while mode == "T" or mode == "P":
+        
+        root_path, num_classes, images, labels, model_path = set_parameters(mode)
     
         if mode ==  "T":
-            module_training(root_path, num_classes, device)
+            #set the paths to folders
+            train_images = os.path.join(root_path, images[0])
+            train_labels = os.path.join(root_path, labels[0])
+            
+            val_images = os.path.join(root_path, images[1])
+            val_labels = os.path.join(root_path, labels[1])
+            
+            #preprocess the images
+            train_images, test_labels = pre_process(train_images, train_labels)
+            val_images, val_labels = pre_process(val_images, val_labels)
+            
+            #prepare the datasets
+            train_set = Dataset(images = train_images,
+                                labels = train_labels,
+                                num_classes = num_classes,
+                                mode = mode)
+          
+            val_set = Dataset(images = val_images,
+                              labels = val_labels,
+                              num_classes = num_classes,
+                              mode = mode)
+            
+            #create the dataloaders
+            train_dataloader = DataLoader(dataset = train_set,
+                                          batch_size = BATCH_SIZE,
+                                          shuffle = True)
+            
+            val_dataloader = DataLoader(dataset = val_set,
+                                        batch_size  = BATCH_SIZE,
+                                        shuffle = True)
+            
+            ModuleTraining(train_dataloader, val_dataloader, num_classes, model_path, device)
             
         else:
-            #if predicting we need information about the model and place for predictions
+            #set the path to folders
+            test_images = os.path.join(root_path, images)
+            #just to clarify
+            prediction_path = os.path.join(root_path, labels)
             
-            #I will set these myself, don't want to be constantly giving these as input
-            #weights_path = input("Give the name of the folder where model weights are saved: ")
-            weights_path = "/Users/vilmalehto/Documents/Koulu/Dippa/Old_Image_Data/model/unet.pth"
+            #preprocess the images
+            processed_images = pre_process(test_images, labels, mode)
             
-            #prediction_folder = input("Give the name of the folder where predictions will be saved: ")
-            prediction_folder = "predictions"
+            #prepare dataset
+            test_set = Dataset(images = processed_images,
+                               labels = "None",
+                               num_classes = num_classes,
+                               mode = mode)
             
-            #image_folder = input("Give the name of the folder where the images are: ")
-            image_folder = "test_images"
+            #prepare dataloader
+            test_dataloader = DataLoader(dataset = test_set,
+                                         batch_size = BATCH_SIZE,
+                                         shuffle = True)
             
             #load the model
             model = UNet(1, num_classes)
-            model.load_state_dict(torch.load(weights_path, map_location = device))
+            model.load_state_dict(torch.load(model_path, map_location = device))
             
-            predicting(model, device, root_path, image_folder, num_classes, prediction_folder)
+            Predicting(test_dataloader, prediction_path, model, device)
             
         mode = input("Do you want to train(T), predict(P) or close the program (C): ")
         print(mode)
