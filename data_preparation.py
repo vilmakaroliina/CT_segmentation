@@ -112,7 +112,7 @@ class Dataset(Dataset):
         Returns the length of the list.
 
         """
-        if self.mode == "train":
+        if self.mode == "T":
             return len(self.slices)
         else:
             return len(self.image_slices)

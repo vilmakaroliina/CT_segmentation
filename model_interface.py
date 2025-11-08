@@ -56,7 +56,6 @@ The file structure:
 import cv2
 import os
 import torch
-import tqdm
 import nibabel as nib
 import numpy as np
 
@@ -267,8 +266,8 @@ if __name__ == "__main__":
             val_labels = os.path.join(root_path, labels[1])
             
             #preprocess the images
-            train_images, test_labels = pre_process(train_images, train_labels)
-            val_images, val_labels = pre_process(val_images, val_labels)
+            train_images, test_labels = pre_process(train_images, train_labels, mode)
+            val_images, val_labels = pre_process(val_images, val_labels, mode)
             
             #prepare the datasets
             train_set = Dataset(images = train_images,
@@ -290,7 +289,7 @@ if __name__ == "__main__":
                                         batch_size  = BATCH_SIZE,
                                         shuffle = True)
             
-            ModuleTraining(train_dataloader, val_dataloader, num_classes, model_path, device)
+            ModuleTraining(train_dataloader, val_dataloader, num_classes, BATCH_SIZE, model_path, device)
             
         else:
             #set the path to folders

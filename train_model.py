@@ -28,7 +28,7 @@ from data_preparation import Dataset #this doesn't exist yet, but the data have 
 
 
 class ModuleTraining():
-    def __init__(self, root_path, train_img, train_labels, val_img, val_labels, num_classes, model_path, device):
+    def __init__(self, train_dataloader, val_dataloader, num_classes, batch_size, model_path, device):
         """
         Functions trains and validates the model. At the end the model is saved
         to a location specified by the user. 
@@ -59,16 +59,14 @@ class ModuleTraining():
         #set the learning parameters
         LEARNING_RATE = 0.0001
         EPOCHS = 1
+        BATCH_SIZE = batch_size
         #DATA_PATH = "/data" #set the correct path as I get the  data
         # MODEL_SAVE = "/models/unet.pth" #set also this once you have the data 
             #and you can run this, I don't know if it have to be an empty folder
             
         #set the parameters given by user
-        self.root_path = root_path
-        self.train_images = train_img
-        self.train_labels= train_labels
-        self.val_images = val_img
-        self.val_labels = val_labels
+        self.train_images = train_dataloader
+        self.val_images = val_dataloader
         self.num_classes = num_classes
         #if you  want to save multiple models change the name of the file below
         #inbetween the runs
