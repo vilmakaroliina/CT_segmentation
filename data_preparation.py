@@ -5,8 +5,7 @@ Created on Wed May  7 09:29:51 2025
 
 @author: vilmalehto
 
-The code for data preparation. The images and data must be in their own folders
-under the same root folder. The images must be in NIfTI format. 
+The code for data preparation. The images must be in NIfTI format. 
 
 """
 
@@ -20,7 +19,7 @@ import torch.nn.functional as F
 from torch.utils.data.dataset import Dataset
 
 class Dataset(Dataset):
-    def __init__(self, root_path, images, labels, num_classes, mode="train"):
+    def __init__(self, image_path, label_path, num_classes, mode="T"):
         """
         The code creates a list structure to acces the images slice-by-slice.
         The list includes the name of the image file, the name of the label
@@ -28,17 +27,16 @@ class Dataset(Dataset):
 
         Parameters
         ----------
-        root_path : String
-            The path to the root folder.
-        images : String
-            The name of the image folder.
-        labels : String
-            The name of the image folder.
+        image_path : String
+            The path to image folder.
+        label_path : String
+            The path to label folder.
         num_classes : int
             The number of segmented classes. 
         mode : string, optional
-            The default is "train". -> so far there is no changes to data
-            preparation for train and predict data. 
+            The default is "train". In this case it created a set including 
+            the images and labels. For predicting a set of only images is 
+            created.
 
         Returns
         -------
@@ -53,17 +51,18 @@ class Dataset(Dataset):
         self.mode = mode
         
         #get the full path to images
-        self.image_path = os.path.join(root_path, images)
+        self.image_path = image_path
+        
+        #create a sorted list of the image files
+        self.image_files = sorted([f for f in os.listdir(self.image_path) if f.endswith('.nii') or f.endswith('.nii.gz')])
         
         #for training we create the structure including images and labels 
-        if self.mode == "train":
+        if self.mode == "T":
                 
             #get the full path to labels
-            self.label_path = os.path.join(root_path, labels)
+            self.label_path = label_path
             
-            #create sorted list of files in the end of path 
-            #so a list of the image files and list of the label files
-            self.image_files = sorted([f for f in os.listdir(self.image_path) if f.endswith('.nii') or f.endswith('.nii.gz')])
+            #create sorted list of the label files
             self.label_files = sorted([f for f in os.listdir(self.label_path) if f.endswith('.nii') or f.endswith('.nii.gz')])
             
             #createas tuple of the files 
@@ -72,11 +71,11 @@ class Dataset(Dataset):
                     
             #create a list of the slices and their corresponding masks
             #(the name of the image file, the name of the label file, and the index for the specific slice)
+            #[(CT1, LABEL1, 1), (CT1, LABEL1, 2), (CT1, LABEL1, 3) ...]
             self.slices = []
             
             for img_file, label_file in pairs:
                 img_vol = nib.load(os.path.join(self.image_path, img_file)).get_fdata()
-                #label_vol = nib.load(os.path.join(self.label_path, label_file)).get_fdata()
                 
                 #could check that the shapes are same, but I am not adding it yet
                 
@@ -88,9 +87,6 @@ class Dataset(Dataset):
         #for predicting, we don't have the labels
         #so it is handled differently (without the label files ofc)
         else:
-            
-            #create a sorted list of the image files
-            self.image_files = sorted([f for f in os.listdir(self.image_path) if f.endswith('.nii') or f.endswith('.nii.gz')])
             
             #and a list of the image slices
             #the name of the image file and the index of the 2D slice
@@ -112,7 +108,7 @@ class Dataset(Dataset):
         Returns the length of the list.
 
         """
-        if self.mode == "train":
+        if self.mode == "T":
             return len(self.slices)
         else:
             return len(self.image_slices)
@@ -140,7 +136,7 @@ class Dataset(Dataset):
             One-hot encoded segmentation mask of the corresponding image. 
 
         """
-        if self.mode == "train":
+        if self.mode == "T":
             #get the infromation
             img_file, label_file, slice_idx = self.slices[index]
         
